@@ -1,7 +1,7 @@
 ## VRS_mouse
 
 ## Cieľ
-Vytvorit riadenie a hardverovu konfiguraciu pre auticko zo senzormi
+Vytvorit riadenie a hardverovu konfiguraciu pre auticko zo senzormi, riadené pomocou MCU STM32. Môže sa pohybovať ľubovoľne, ale pri detekcii človeka sa musí vyhnúť zrážke.  
 
 ## HW specifikacia
 Auticko je riadene pomoсou MCU STM32 a obsahuje senzory. 
