@@ -1,6 +1,6 @@
 ## VRS_mouse
 
-Projekt predstavuje autonómne robotické autíčko vybavené senzormi, ktoré sa dokáže samostatne pohybovať v priestore bez kolízií s prekážkami. Autíčko je navrhnuté tak, aby rozpoznalo prítomnosť človeka a aktívne sa od neho vzďaľovalo, čím simuluje správanie úniku.32. Môže sa pohybovať ľubovoľne, ale pri detekcii človeka sa musí vyhnúť zrážke.  
+Projekt predstavuje autonómne robotické autíčko vybavené senzormi, ktoré sa dokáže samostatne pohybovať v priestore bez kolízií s prekážkami. Autíčko je navrhnuté tak, aby rozpoznalo prítomnosť človeka a aktívne sa od neho vzďaľovalo, čím simuluje správanie úniku. Môže sa pohybovať ľubovoľne, ale pri detekcii človeka sa musí vyhnúť zrážke.  
 
 Riadiacou jednotkou systému bude mikrokontrolér STM32, ktorý zabezpečuje spracovanie údajov zo senzorov, vyhodnocovanie okolitého prostredia a riadenie pohybu motorov v reálnom čase.
 
