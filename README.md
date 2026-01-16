@@ -8,6 +8,16 @@ Autíčko bude pomocou senzorov nepretržite monitorovať vzdialenosť od preká
 
 ## HW specifikacia
 Auticko je riadene pomoсou MCU STM32 a obsahuje senzory na detekciu prekážok. 
+Hardvér potrebný pre navrh projektu:
+- 2x DC motor
+- 1x dvochkanálový motor driver
+- 2x ultrazvukový senzor
+- 1x STM32 NUCLEO-F303K8 mikrokontrolér
+- 1x batéria 7–12 V
+- 2x motorové koleso
+- 1x oporné koliesko
+- 1x podvozok
+- Spojovacé vodiče
 
 ## Rozdelenie uhol
 Stanislav – konfigurácia hardvéru, nastavenia vstupov/výstupov, spracovanie údajov zo senzorov a pohyb motorov.
