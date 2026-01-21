@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,7 +33,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define TRIG_PIN GPIO_PIN_0
+#define TRIG_PORT GPIOA
+#define ECHO_PIN GPIO_PIN_1
+#define ECHO_PORT GPIOA
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,6 +53,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+uint32_t measure_distance_cm(void);
 
 /* USER CODE END PFP */
 
@@ -89,6 +93,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk))
+  	    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  	DWT->CYCCNT = 0;
+  	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
   printf("UART debug ready!\r\n");
   /* USER CODE END 2 */
 
@@ -96,6 +104,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  uint32_t dist = measure_distance_cm();
+	  printf("Distance: %lu cm\r\n", dist);
+	  HAL_Delay(500);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -145,6 +157,34 @@ int _write(int file, char *ptr, int len)
 {
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     return len;
+}
+uint32_t measure_distance_cm(void)
+{
+    uint32_t start_tick = 0, end_tick = 0;
+
+    // 1. Триг высокий на 10 мкс
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);
+    DWT->CYCCNT = 0;
+    while (DWT->CYCCNT < (SystemCoreClock / 1000000) * 10); // 10 мкс
+    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
+
+    // 2. Ждём Rising Edge на Echo
+    while(HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_RESET);
+
+    start_tick = DWT->CYCCNT;
+
+    // 3. Ждём Falling Edge
+    while(HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_SET);
+
+    end_tick = DWT->CYCCNT;
+
+    // 4. Вычисляем длительность в микросекундах
+    uint32_t pulse_us = (end_tick - start_tick) / (SystemCoreClock / 1000000);
+
+    // 5. Переводим в см: расстояние = время * 0.034 / 2
+    uint32_t distance_cm = pulse_us * 34 / 2000;
+
+    return distance_cm;
 }
 
 /* USER CODE END 4 */
