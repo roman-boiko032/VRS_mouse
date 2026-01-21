@@ -1,0 +1,21 @@
+# ===== Build output =====
+firmware/Debug/
+firmware/Release/
+
+# ===== Compiled files =====
+*.o
+*.elf
+*.map
+*.hex
+*.bin
+
+# ===== STM32CubeIDE =====
+*.launch
+.settings/
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
