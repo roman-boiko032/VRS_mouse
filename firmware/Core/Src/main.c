@@ -28,15 +28,20 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct {
+    GPIO_TypeDef* trig_port;
+    uint16_t      trig_pin;
+    GPIO_TypeDef* echo_port;
+    uint16_t      echo_pin;
+} HCSR04_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TRIG_PIN GPIO_PIN_0
-#define TRIG_PORT GPIOA
-#define ECHO_PIN GPIO_PIN_1
-#define ECHO_PORT GPIOA
+//#define TRIG_PIN GPIO_PIN_0
+//#define TRIG_PORT GPIOA
+//#define ECHO_PIN GPIO_PIN_1
+//#define ECHO_PORT GPIOA
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -53,13 +58,19 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-uint32_t measure_distance_cm(void);
 
+uint32_t hcsr04_measure_cm(HCSR04_t* s);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+HCSR04_t sensors[4] = {
+//TRIG_PORT, TRIG_PIN, ECHO_PORT, ECHO_PIN
+    {GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1}, // left sensor
+    {GPIOA, GPIO_PIN_4, GPIOA, GPIO_PIN_5}, // right sensor
+    {GPIOA, GPIO_PIN_6, GPIOA, GPIO_PIN_7}, // front sensor
+    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1}  // back sensor
+};
 /* USER CODE END 0 */
 
 /**
@@ -104,10 +115,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  uint32_t dist = measure_distance_cm();
-	  printf("Distance: %lu cm\r\n", dist);
-	  HAL_Delay(500);
+//	  uint32_t dist = measure_distance_cm();
+//	  printf("Distance: %lu cm\r\n", dist);
+//	  HAL_Delay(500);
 
+	  for (int i = 0; i < 4; i++)
+	      {
+	          uint32_t dist = hcsr04_measure_cm(&sensors[i]);
+	          printf("Sensor %d: %lu cm\r\n", i + 1, dist);
+	          HAL_Delay(60);
+	      }
+
+	      printf("----\r\n");
+	      HAL_Delay(300);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -158,34 +178,44 @@ int _write(int file, char *ptr, int len)
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     return len;
 }
-uint32_t measure_distance_cm(void)
+
+
+uint32_t hcsr04_measure_cm(HCSR04_t* s)
 {
-    uint32_t start_tick = 0, end_tick = 0;
+    uint32_t start_tick, end_tick;
+    uint32_t timeout;
 
-    // 1. Триг высокий на 10 мкс
-    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET);
+    // TRIG 10 мкс
+    HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_SET);
     DWT->CYCCNT = 0;
-    while (DWT->CYCCNT < (SystemCoreClock / 1000000) * 10); // 10 мкс
-    HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
+    while (DWT->CYCCNT < (SystemCoreClock / 1000000) * 10);
+    HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_RESET);
 
-    // 2. Ждём Rising Edge на Echo
-    while(HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_RESET);
+    // Ждём фронт (max ~25 ms)
+    timeout = DWT->CYCCNT;
+    while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_RESET)
+    {
+        if ((DWT->CYCCNT - timeout) > (SystemCoreClock / 40)) // ~25 ms
+            return 0;
+    }
 
     start_tick = DWT->CYCCNT;
 
-    // 3. Ждём Falling Edge
-    while(HAL_GPIO_ReadPin(ECHO_PORT, ECHO_PIN) == GPIO_PIN_SET);
+    // Ждём спад
+    while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_SET)
+    {
+        if ((DWT->CYCCNT - start_tick) > (SystemCoreClock / 40))
+            return 0;
+    }
 
     end_tick = DWT->CYCCNT;
 
-    // 4. Вычисляем длительность в микросекундах
-    uint32_t pulse_us = (end_tick - start_tick) / (SystemCoreClock / 1000000);
+    uint32_t pulse_us =
+        (end_tick - start_tick) / (SystemCoreClock / 1000000);
 
-    // 5. Переводим в см: расстояние = время * 0.034 / 2
-    uint32_t distance_cm = pulse_us * 34 / 2000;
-
-    return distance_cm;
+    return pulse_us * 34 / 2000;
 }
+
 
 /* USER CODE END 4 */
 
