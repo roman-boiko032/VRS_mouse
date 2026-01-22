@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -38,10 +39,11 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-//#define TRIG_PIN GPIO_PIN_0
-//#define TRIG_PORT GPIOA
-//#define ECHO_PIN GPIO_PIN_1
-//#define ECHO_PORT GPIOA
+#define RIGHT_STOP 	150
+#define LEFT_STOP	149
+#define SERVO_CW 	130
+#define SERVO_CCW 	170
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,10 +68,10 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s);
 /* USER CODE BEGIN 0 */
 HCSR04_t sensors[4] = {
 //TRIG_PORT, TRIG_PIN, ECHO_PORT, ECHO_PIN
-    {GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1}, // left sensor
-    {GPIOA, GPIO_PIN_4, GPIOA, GPIO_PIN_5}, // right sensor
-    {GPIOA, GPIO_PIN_6, GPIOA, GPIO_PIN_7}, // front sensor
-    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1}  // back sensor
+    {GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1}, // left sensor 1
+    {GPIOA, GPIO_PIN_4, GPIOA, GPIO_PIN_5}, // right sensor 2
+    {GPIOA, GPIO_PIN_6, GPIOA, GPIO_PIN_7}, // front sensor 3
+    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1}  // back sensor 4
 };
 /* USER CODE END 0 */
 
@@ -103,21 +105,37 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4); // right motor
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);// left motor
   if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk))
   	    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   	DWT->CYCCNT = 0;
   	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
   printf("UART debug ready!\r\n");
+
+  // stop
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);
+  HAL_Delay(1000);
+
+  // go forward
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, SERVO_CW);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, SERVO_CCW);
+  HAL_Delay(2000);
+
+  // stop
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  uint32_t dist = measure_distance_cm();
-//	  printf("Distance: %lu cm\r\n", dist);
-//	  HAL_Delay(500);
 
 	  for (int i = 0; i < 4; i++)
 	      {
@@ -143,6 +161,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -166,6 +185,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_TIM1;
+  PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
