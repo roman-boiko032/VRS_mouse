@@ -137,15 +137,39 @@ int main(void)
   while (1)
   {
 
-	  for (int i = 0; i < 4; i++)
+	  uint32_t dist[4];
+
+	      // измеряем все 4 датчика
+	      for (int i = 0; i < 4; i++)
 	      {
-	          uint32_t dist = hcsr04_measure_cm(&sensors[i]);
-	          printf("Sensor %d: %lu cm\r\n", i + 1, dist);
+	          dist[i] = hcsr04_measure_cm(&sensors[i]);
+	          printf("Sensor %d: %lu cm\r\n", i + 1, dist[i]);
 	          HAL_Delay(60);
 	      }
 
 	      printf("----\r\n");
-	      HAL_Delay(300);
+	      HAL_Delay(100);
+
+	      // экстренные реакции на расстояние < 3 см
+	      // правая и передняя → правое колесо вперед
+	      if (dist[1] < 5 || dist[2] < 5)
+	      {
+	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, SERVO_CW);  // правое колесо вперед
+	      }
+	      else
+	      {
+	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP); // стоп, если нет препятствий
+	      }
+
+	      // левая и задняя → левое колесо назад
+	      if (dist[0] < 5 || dist[3] < 5)
+	      {
+	          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, SERVO_CCW); // левое колесо назад
+	      }
+	      else
+	      {
+	          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);  // стоп
+	      }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
