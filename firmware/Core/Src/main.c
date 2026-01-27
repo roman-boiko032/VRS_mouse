@@ -39,10 +39,18 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define LEFT_FW 170 // SERVO_CCW
+#define LEFT_FW_SLOW 160
+#define LEFT_STOP	149.5
+#define LEFT_BW_SLOW 140
+#define LEFT_BW 130 // SERVO_CW
+
+#define RIGHT_FW 130
+#define RIGHT_FW_SLOW 140
 #define RIGHT_STOP 	150
-#define LEFT_STOP	149
-#define SERVO_CW 	130
-#define SERVO_CCW 	170
+#define RIGHT_BW_SLOW 160
+#define RIGHT_BW 170
 
 /* USER CODE END PD */
 
@@ -54,24 +62,35 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+typedef enum  {
+	CAR_WANDER, CAR_TURNING_LEFT, CAR_TURNING_RIGHT, CAR_ESCAPE
+} car_state;
 
+typedef enum {
+	ENV_NONE, ENV_OBSTACLE_FRONT, ENV_OBSTACLE_LEFT, ENV_OBSTACLE_RIGHT, ENV_OBSTACLE_BACK
+} env_state;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
 uint32_t hcsr04_measure_cm(HCSR04_t* s);
+void motors_stop();
+void motors_turn_left();
+void motors_turn_right();
+void motors_forward_fast();
+void motors_forward_slow();
+env_state classify_env(uint32_t *dist);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 HCSR04_t sensors[4] = {
 //TRIG_PORT, TRIG_PIN, ECHO_PORT, ECHO_PIN
-    {GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1}, // left sensor 1
-    {GPIOA, GPIO_PIN_4, GPIOA, GPIO_PIN_5}, // right sensor 2
-    {GPIOA, GPIO_PIN_6, GPIOA, GPIO_PIN_7}, // front sensor 3
-    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1}  // back sensor 4
+    {GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1}, // Right sensor 1
+    {GPIOA, GPIO_PIN_4, GPIOA, GPIO_PIN_5}, // Left sensor 2
+    {GPIOA, GPIO_PIN_6, GPIOA, GPIO_PIN_7}, // Front sensor 3
+    {GPIOB, GPIO_PIN_0, GPIOB, GPIO_PIN_1}  // Back sensor 4
 };
 /* USER CODE END 0 */
 
@@ -122,13 +141,16 @@ int main(void)
   HAL_Delay(1000);
 
   // go forward
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, SERVO_CW);
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, SERVO_CCW);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW);
   HAL_Delay(2000);
 
   // stop
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);
+
+  car_state c_state = CAR_WANDER;
+  env_state env = ENV_NONE;
 
   /* USER CODE END 2 */
 
@@ -137,39 +159,64 @@ int main(void)
   while (1)
   {
 
-	  uint32_t dist[4];
+	uint32_t dist[4];
 
-	      // измеряем все 4 датчика
-	      for (int i = 0; i < 4; i++)
-	      {
-	          dist[i] = hcsr04_measure_cm(&sensors[i]);
-	          printf("Sensor %d: %lu cm\r\n", i + 1, dist[i]);
-	          HAL_Delay(60);
-	      }
+	// measure distance from sensors
+	for (int i = 0; i < 4; i++)
+	{
+	  dist[i] = hcsr04_measure_cm(&sensors[i]);
+	  printf("Sensor %d: %lu cm\r\n", i + 1, dist[i]); // log to serial port
+	  HAL_Delay(60);
+	}
+	printf("----\r\n");
+	//HAL_Delay(100);
 
-	      printf("----\r\n");
-	      HAL_Delay(100);
+	// assign state based on measurements
+	env = classify_env(dist);
 
-	      // экстренные реакции на расстояние < 3 см
-	      // правая и передняя → правое колесо вперед
-	      if (dist[1] < 5 || dist[2] < 5)
-	      {
-	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, SERVO_CW);  // правое колесо вперед
-	      }
-	      else
-	      {
-	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP); // стоп, если нет препятствий
-	      }
+	// movement behaviour
+	switch (env){
+		case ENV_NONE:
+			if(c_state == CAR_ESCAPE)
+				c_state = CAR_WANDER;
+			motors_stop();
+			break;
+		case ENV_OBSTACLE_FRONT:
+			c_state = CAR_TURNING_LEFT;
+			break;
+		case ENV_OBSTACLE_LEFT:
+			c_state = CAR_TURNING_RIGHT;
+			break;
+		case ENV_OBSTACLE_RIGHT:
+			c_state = CAR_TURNING_LEFT;
+			break;
+		case ENV_OBSTACLE_BACK:
+			c_state = CAR_ESCAPE;
+			break;
+		default:
+//			motors_stop();
+			break;
+	}
 
-	      // левая и задняя → левое колесо назад
-	      if (dist[0] < 5 || dist[3] < 5)
-	      {
-	          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, SERVO_CCW); // левое колесо назад
-	      }
-	      else
-	      {
-	          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);  // стоп
-	      }
+	switch (c_state){
+		case CAR_TURNING_LEFT:
+			motors_turn_left();
+			break;
+		case CAR_TURNING_RIGHT:
+			motors_turn_right();
+			break;
+		case CAR_WANDER:
+			motors_forward_slow();
+			break;
+		case CAR_ESCAPE:
+			motors_forward_fast();
+			break;
+		default:
+			motors_stop();
+			break;
+	}
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -265,7 +312,45 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s)
     return pulse_us * 34 / 2000;
 }
 
+void motors_stop()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP); // Right wheel stop
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP); // Left wheel stop
+}
 
+void motors_turn_left()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW); // Right wheel forward
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_BW); // Left wheel backwards
+}
+
+void motors_turn_right()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_BW); // Right wheel backwards
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW); // Left wheel forward
+}
+
+void motors_forward_fast()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW); // Right wheel forward
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW); // Left wheel forward
+}
+
+void motors_forward_slow()
+{
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW); // Right wheel slow forward
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW); // Left wheel slow forward
+}
+
+env_state classify_env(uint32_t *dist)
+{
+    if (dist[2] < 10) return ENV_OBSTACLE_FRONT;
+    if (dist[3] < 20) return ENV_OBSTACLE_BACK;
+    if (dist[0] < 10) return ENV_OBSTACLE_RIGHT;
+    if (dist[1] < 10) return ENV_OBSTACLE_LEFT;
+
+    return ENV_NONE;
+}
 /* USER CODE END 4 */
 
 /**
