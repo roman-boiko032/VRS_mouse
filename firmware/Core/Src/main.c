@@ -42,15 +42,15 @@ typedef struct {
 /* USER CODE BEGIN PD */
 
 #define LEFT_FW 170 // SERVO_CCW
-#define LEFT_FW_SLOW 160
+#define LEFT_FW_SLOW 155
 #define LEFT_STOP	149
-#define LEFT_BW_SLOW 140
+#define LEFT_BW_SLOW 145
 #define LEFT_BW 130 // SERVO_CW
 
 #define RIGHT_FW 130
-#define RIGHT_FW_SLOW 140
+#define RIGHT_FW_SLOW 145
 #define RIGHT_STOP 	150
-#define RIGHT_BW_SLOW 160
+#define RIGHT_BW_SLOW 155
 #define RIGHT_BW 170
 
 #define LED_PORT GPIOA
@@ -179,7 +179,7 @@ int main(void)
 	{
 	  dist[i] = hcsr04_measure_cm(&sensors[i]);
 	  printf("Sensor %d: %lu cm\r\n", i + 1, dist[i]); // log to serial port
-	  HAL_Delay(10);
+	  HAL_Delay(5);
 	}
 	printf("----\r\n");
 	//HAL_Delay(100);
@@ -192,7 +192,7 @@ int main(void)
 	    obstacle_confidence = 0; // Reset if the path is clear
 	}
 
-	if (obstacle_confidence >= 3) { // Only change state if seen 3 times
+	if (obstacle_confidence >= 5) { // Only change state if seen 3 times
 	    env = detected_env;
 	} else {
 	    env = ENV_NONE;
@@ -401,10 +401,10 @@ void motors_forward_slow()
 
 env_state classify_env(uint32_t *dist)
 {
-    if (dist[2] < 10) return ENV_OBSTACLE_FRONT;
-    if (dist[3] < 30) return ENV_OBSTACLE_BACK;
-    if (dist[0] < 10) return ENV_OBSTACLE_RIGHT;
-    if (dist[1] < 10) return ENV_OBSTACLE_LEFT;
+    if (dist[2] < 15) return ENV_OBSTACLE_FRONT;
+    if (dist[3] < 35) return ENV_OBSTACLE_BACK;
+    if (dist[0] < 15) return ENV_OBSTACLE_RIGHT;
+    if (dist[1] < 15) return ENV_OBSTACLE_LEFT;
 
     return ENV_NONE;
 }
