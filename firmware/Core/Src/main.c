@@ -163,6 +163,7 @@ int main(void)
   uint32_t last_wander_tick = HAL_GetTick();
   uint32_t wander_interval = 2000; // 2s
   int wander_direction = 0;        // 0 = Left, 1 = Right
+  int obstacle_confidence = 0;
 
   /* USER CODE END 2 */
 
@@ -178,42 +179,50 @@ int main(void)
 	{
 	  dist[i] = hcsr04_measure_cm(&sensors[i]);
 	  printf("Sensor %d: %lu cm\r\n", i + 1, dist[i]); // log to serial port
-	  HAL_Delay(60);
+	  HAL_Delay(10);
 	}
 	printf("----\r\n");
 	//HAL_Delay(100);
 
 	// assign environment state based on measurements
-	env = classify_env(dist);
+	env_state detected_env = classify_env(dist);
+	if (detected_env != ENV_NONE) {
+	    obstacle_confidence++;
+	} else {
+	    obstacle_confidence = 0; // Reset if the path is clear
+	}
+
+	if (obstacle_confidence >= 3) { // Only change state if seen 3 times
+	    env = detected_env;
+	} else {
+	    env = ENV_NONE;
+	}
 
 	// movement behaviour
 	switch (env){
 		case ENV_NONE:
-			if(c_state == CAR_ESCAPE || c_state == CAR_TURNING_LEFT || c_state == CAR_TURNING_RIGHT)
+			if(c_state == CAR_ESCAPE)
 			{
 				c_state = CAR_WANDER_FW;
 				last_wander_tick = HAL_GetTick();
 			}
-			if ((HAL_GetTick() - last_wander_tick) > wander_interval)
+			if (c_state == CAR_WANDER_FW || c_state == CAR_WANDER_TURN)
 			{
-				last_wander_tick = HAL_GetTick(); // Reset timer
+				if ((HAL_GetTick() - last_wander_tick) > wander_interval)
+				{
+					last_wander_tick = HAL_GetTick();
 
-				if (c_state == CAR_WANDER_FW) {
-					// Time to turn! Switch state to Random Turn
-					c_state = CAR_WANDER_TURN;
-
-					// 1. Pick a random turn duration (e.g., 300ms to 800ms)
-					wander_interval = 300 + (rand() % 500);
-
-					// 2. Pick a random direction (0 or 1)
-					wander_direction = rand() % 2;
-				}
-				else {
-					// Turn is done! Switch state back to Forward
-					c_state = CAR_WANDER_FW;
-
-					// Pick a random forward duration (e.g., 1s to 3s)
-					wander_interval = 1000 + (rand() % 2000);
+					if (c_state == CAR_WANDER_FW) {
+						// Switch to Turning
+						c_state = CAR_WANDER_TURN;
+						wander_interval = 300 + (rand() % 500);
+						wander_direction = rand() % 2;
+					}
+					else {
+						// Switch back to Forward
+						c_state = CAR_WANDER_FW;
+						wander_interval = 1000 + (rand() % 2000);
+					}
 				}
 			}
 			break;
@@ -230,7 +239,7 @@ int main(void)
 			c_state = CAR_ESCAPE;
 			break;
 		default:
-//			motors_stop();
+			motors_stop();
 			break;
 	}
 	// control motors based on the envirnment
@@ -340,7 +349,7 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s)
     while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_RESET)
     {
         if ((DWT->CYCCNT - timeout) > (SystemCoreClock / 40)) // ~25 ms
-            return 0;
+            return 99;
     }
 
     start_tick = DWT->CYCCNT;
@@ -368,14 +377,14 @@ void motors_stop()
 
 void motors_turn_left()
 {
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW); // Right wheel forward
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_BW); // Left wheel backwards
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW_SLOW); // Right wheel forward
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_BW_SLOW); // Left wheel backwards
 }
 
 void motors_turn_right()
 {
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_BW); // Right wheel backwards
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW); // Left wheel forward
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_BW_SLOW); // Right wheel backwards
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW_SLOW); // Left wheel forward
 }
 
 void motors_forward_fast()
@@ -386,14 +395,14 @@ void motors_forward_fast()
 
 void motors_forward_slow()
 {
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW); // Right wheel slow forward
-	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW); // Left wheel slow forward
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_FW_SLOW); // Right wheel slow forward
+	__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_FW_SLOW); // Left wheel slow forward
 }
 
 env_state classify_env(uint32_t *dist)
 {
     if (dist[2] < 10) return ENV_OBSTACLE_FRONT;
-    if (dist[3] < 20) return ENV_OBSTACLE_BACK;
+    if (dist[3] < 30) return ENV_OBSTACLE_BACK;
     if (dist[0] < 10) return ENV_OBSTACLE_RIGHT;
     if (dist[1] < 10) return ENV_OBSTACLE_LEFT;
 
