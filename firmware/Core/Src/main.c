@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,7 +43,7 @@ typedef struct {
 
 #define LEFT_FW 170 // SERVO_CCW
 #define LEFT_FW_SLOW 160
-#define LEFT_STOP	149.5
+#define LEFT_STOP	149
 #define LEFT_BW_SLOW 140
 #define LEFT_BW 130 // SERVO_CW
 
@@ -52,6 +53,10 @@ typedef struct {
 #define RIGHT_BW_SLOW 160
 #define RIGHT_BW 170
 
+#define LED_PORT GPIOA
+#define LED_PIN_R GPIO_PIN_8
+#define LED_PIN_G GPIO_PIN_9
+#define LED_PIN_B GPIO_PIN_10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,7 +68,7 @@ typedef struct {
 
 /* USER CODE BEGIN PV */
 typedef enum  {
-	CAR_WANDER, CAR_TURNING_LEFT, CAR_TURNING_RIGHT, CAR_ESCAPE
+	CAR_WANDER_FW, CAR_WANDER_TURN, CAR_TURNING_LEFT, CAR_TURNING_RIGHT, CAR_ESCAPE
 } car_state;
 
 typedef enum {
@@ -80,6 +85,7 @@ void motors_turn_left();
 void motors_turn_right();
 void motors_forward_fast();
 void motors_forward_slow();
+void set_led_rgb(uint8_t r, uint8_t g, uint8_t b);
 env_state classify_env(uint32_t *dist);
 /* USER CODE END PFP */
 
@@ -111,7 +117,8 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  // random seed for wandering behaviour
+  srand(HAL_GetTick());
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -149,8 +156,13 @@ int main(void)
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, RIGHT_STOP);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, LEFT_STOP);
 
-  car_state c_state = CAR_WANDER;
+  // Initialize states
+  car_state c_state = CAR_WANDER_FW;
   env_state env = ENV_NONE;
+
+  uint32_t last_wander_tick = HAL_GetTick();
+  uint32_t wander_interval = 2000; // 2s
+  int wander_direction = 0;        // 0 = Left, 1 = Right
 
   /* USER CODE END 2 */
 
@@ -171,15 +183,39 @@ int main(void)
 	printf("----\r\n");
 	//HAL_Delay(100);
 
-	// assign state based on measurements
+	// assign environment state based on measurements
 	env = classify_env(dist);
 
 	// movement behaviour
 	switch (env){
 		case ENV_NONE:
-			if(c_state == CAR_ESCAPE)
-				c_state = CAR_WANDER;
-			motors_stop();
+			if(c_state == CAR_ESCAPE || c_state == CAR_TURNING_LEFT || c_state == CAR_TURNING_RIGHT)
+			{
+				c_state = CAR_WANDER_FW;
+				last_wander_tick = HAL_GetTick();
+			}
+			if ((HAL_GetTick() - last_wander_tick) > wander_interval)
+			{
+				last_wander_tick = HAL_GetTick(); // Reset timer
+
+				if (c_state == CAR_WANDER_FW) {
+					// Time to turn! Switch state to Random Turn
+					c_state = CAR_WANDER_TURN;
+
+					// 1. Pick a random turn duration (e.g., 300ms to 800ms)
+					wander_interval = 300 + (rand() % 500);
+
+					// 2. Pick a random direction (0 or 1)
+					wander_direction = rand() % 2;
+				}
+				else {
+					// Turn is done! Switch state back to Forward
+					c_state = CAR_WANDER_FW;
+
+					// Pick a random forward duration (e.g., 1s to 3s)
+					wander_interval = 1000 + (rand() % 2000);
+				}
+			}
 			break;
 		case ENV_OBSTACLE_FRONT:
 			c_state = CAR_TURNING_LEFT;
@@ -197,22 +233,34 @@ int main(void)
 //			motors_stop();
 			break;
 	}
-
+	// control motors based on the envirnment
 	switch (c_state){
 		case CAR_TURNING_LEFT:
 			motors_turn_left();
+			set_led_rgb(1, 1, 0); // yellow for turning
 			break;
 		case CAR_TURNING_RIGHT:
 			motors_turn_right();
+			set_led_rgb(1, 1, 0); // yellow
 			break;
-		case CAR_WANDER:
+		case CAR_WANDER_FW:
 			motors_forward_slow();
+			set_led_rgb(0, 1, 0); // green for wandering
+			break;
+		case CAR_WANDER_TURN:
+			if(wander_direction == 0)
+				motors_turn_left();
+			else
+				motors_turn_right();
+			set_led_rgb(0, 0, 1); // blue for turning while wandering
 			break;
 		case CAR_ESCAPE:
 			motors_forward_fast();
+			set_led_rgb(1, 0, 0); // red for escaping from obstacle
 			break;
 		default:
 			motors_stop();
+			set_led_rgb(0, 0, 0); // off
 			break;
 	}
 
@@ -350,6 +398,14 @@ env_state classify_env(uint32_t *dist)
     if (dist[1] < 10) return ENV_OBSTACLE_LEFT;
 
     return ENV_NONE;
+}
+
+void set_led_rgb(uint8_t r, uint8_t g, uint8_t b)
+{
+    // 1 = ON, 0 = OFF
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN_R, r ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN_G, g ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN_B, b ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 /* USER CODE END 4 */
 
