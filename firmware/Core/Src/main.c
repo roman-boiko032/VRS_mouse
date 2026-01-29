@@ -192,7 +192,7 @@ int main(void)
 	    obstacle_confidence = 0; // Reset if the path is clear
 	}
 
-	if (obstacle_confidence >= 5) { // Only change state if seen 3 times
+	if (obstacle_confidence >= 3) { // Only change state if seen 3 times
 	    env = detected_env;
 	} else {
 	    env = ENV_NONE;
@@ -358,7 +358,7 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s)
     while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_SET)
     {
         if ((DWT->CYCCNT - start_tick) > (SystemCoreClock / 40))
-            return 0;
+            return 21;
     }
 
     end_tick = DWT->CYCCNT;
@@ -401,10 +401,10 @@ void motors_forward_slow()
 
 env_state classify_env(uint32_t *dist)
 {
-    if (dist[2] < 15) return ENV_OBSTACLE_FRONT;
-    if (dist[3] < 35) return ENV_OBSTACLE_BACK;
-    if (dist[0] < 15) return ENV_OBSTACLE_RIGHT;
-    if (dist[1] < 15) return ENV_OBSTACLE_LEFT;
+    if (dist[2] < 20) return ENV_OBSTACLE_FRONT;
+    if (dist[3] < 40) return ENV_OBSTACLE_BACK;
+    if (dist[0] < 20) return ENV_OBSTACLE_RIGHT;
+    if (dist[1] < 20) return ENV_OBSTACLE_LEFT;
 
     return ENV_NONE;
 }
