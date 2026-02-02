@@ -338,13 +338,13 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s)
     uint32_t start_tick, end_tick;
     uint32_t timeout;
 
-    // TRIG 10 мкс
+    
     HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_SET);
     DWT->CYCCNT = 0;
     while (DWT->CYCCNT < (SystemCoreClock / 1000000) * 10);
     HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_RESET);
 
-    // Ждём фронт (max ~25 ms)
+    
     timeout = DWT->CYCCNT;
     while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_RESET)
     {
@@ -354,7 +354,7 @@ uint32_t hcsr04_measure_cm(HCSR04_t* s)
 
     start_tick = DWT->CYCCNT;
 
-    // Ждём спад
+    
     while (HAL_GPIO_ReadPin(s->echo_port, s->echo_pin) == GPIO_PIN_SET)
     {
         if ((DWT->CYCCNT - start_tick) > (SystemCoreClock / 40))
